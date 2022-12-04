@@ -84,7 +84,7 @@ UserSchema.methods.matchPassword = async function (enteredPassword: string) {
 }
 
 UserSchema.methods.getSignedJwtToken = function () {
-    return jwt.sign({ id: this._id }, process.env.JWT_SECRET ?? 'some#strong@secret-0', {
+    return jwt.sign({ id: this._id }, process.env.JWT_SECRET ?? 'some#strong@secret', {
         expiresIn: process.env.JWT_EXPIRE
     })
 }
@@ -104,3 +104,5 @@ UserSchema.methods.getResetPasswordToken = function () {
 
     return resetToken
 }
+
+export default mongoose.model('User', UserSchema)
