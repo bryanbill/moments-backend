@@ -5,9 +5,9 @@ export const DBconnection = async () => {
         .connect(process.env.MONGO_URI ?? "mongodb://localhost:27017/moments", {
 
         })
-        .then(() => console.log("DB connected".cyan.underline))
+        .then(() => console.log("DB connected"))
         .catch(err => {
-            console.log(`For some reasons we couldn't connect to the DB`.red, err)
+            console.log(`For some reasons we couldn't connect to the DB`, err)
         })
 
 }

@@ -1,5 +1,6 @@
-import User, { UserSchema } from "models/User";
+import User from "../models/User";
 import express from 'express';
+import { asyncHandler } from "../utils/asyncHandler";
 
 /**
  * @desc    Register user

@@ -1,4 +1,5 @@
 import express from 'express';
+import { asyncHandler } from 'utils/asyncHandler';
 
 export const protect = asyncHandler(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     let token: string;

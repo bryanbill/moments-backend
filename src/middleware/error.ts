@@ -1,6 +1,6 @@
-import { ErrorResponse } from "utils/errorResponse"
+import { ErrorResponse } from "../utils/errorResponse"
 import express from 'express';
-const errorHandler = (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+export const errorHandler = (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     let error = {
         ...err
     }
