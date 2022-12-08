@@ -1,4 +1,6 @@
-import User from "../models/User";
+/// <reference path="../../types/index.d.ts" />
+
+import { UserModel, UserDoc } from "../models/User";
 import express from 'express';
 import { asyncHandler } from "../utils/asyncHandler";
 import { ErrorResponse } from "../utils/errorResponse";
@@ -14,7 +16,7 @@ import path from 'path';
 export const register = asyncHandler(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     let { channelName, email, password } = req.body;
 
-    await User.create({
+    await UserModel.create({
         channelName,
         email,
         password,
@@ -38,13 +40,13 @@ export const login = asyncHandler(async (req: express.Request, res: express.Resp
 
     email = email.toLowerCase()
 
-    const user = await User.findOne({ email }).select('+password')
+    const user = await UserModel.findOne({ email }).select('+password')
 
     if (!user) {
         return next(new ErrorResponse('Invalid credentials', 400))
     }
 
-    const isMatch = await (user as any).matchPassword(password)
+    const isMatch = await user.matchPassword(password)
 
     if (!isMatch) {
         return next(new ErrorResponse('Invalid credentials', 400))
@@ -69,8 +71,13 @@ export const logout = asyncHandler(async (req: express.Request, res: express.Res
 // @route   POST /api/v1/auth/me
 // @access  Private
 export const getMe = asyncHandler(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const user = (req as any).user
-    res.status(200).json({ success: true, data: user })
+    try {
+        const user = req.user
+        res.status(200).json({ success: true, data: user })
+    } catch (err) {
+        console.log(err)
+        res.status(400).json({ success: false, error: err })
+    }
 })
 
 // @desc    Update user details
@@ -81,7 +88,7 @@ export const updateDetails = asyncHandler(async (req: express.Request, res: expr
         channelName: req.body.channelName,
         email: req.body.email.toLowerCase()
     }
-    const user = await User.findByIdAndUpdate((req as any).user.id, fieldsToUpdate, {
+    const user = await UserModel.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
         new: true,
         runValidators: true,
         context: 'query'
@@ -136,9 +143,9 @@ export const uploadChannelAvatar = asyncHandler(async (req: any, res: express.Re
 // @route   PUT /api/v1/auth/updatepassword
 // @access  Private
 export const updatePassword = asyncHandler(async (req: any, res: express.Response, next: express.NextFunction) => {
-    const user = await User.findById(req.user.id).select('+password')
+    const user = await UserModel.findById(req.user.id).select('+password').orFail()
 
-    if (!(await (user as any).matchPassword(req.body.currentPassword))) {
+    if (!(await user.matchPassword(req.body.currentPassword))) {
         // return next(new ErrorResponse('Password is incorrect', 401))
         return res.status(400).json({
             success: false,
@@ -158,13 +165,13 @@ export const updatePassword = asyncHandler(async (req: any, res: express.Respons
 // @route   POST /api/v1/auth/forgotpassword
 // @access  Public
 export const forgotPassword = asyncHandler(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const user = await User.findOne({ email: req.body.email.toLowerCase() })
+    const user = await UserModel.findOne({ email: req.body.email.toLowerCase() })
 
     if (!user) {
         return next(new ErrorResponse('There is no user with that email', 404))
     }
 
-    const resetToken = (user as any).getResetPasswordToken()
+    const resetToken = user.getResetPasswordToken
 
     await user.save({ validateBeforeSave: false })
 
@@ -200,7 +207,7 @@ export const resetPassword = asyncHandler(async (req: express.Request, res: expr
 
     console.log(resetPasswordToken)
 
-    const user = await User.findOne({
+    const user = await UserModel.findOne({
         resetPasswordToken,
         resetPasswordExpire: { $gt: Date.now() }
     })
