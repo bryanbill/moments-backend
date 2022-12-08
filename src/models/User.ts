@@ -3,106 +3,85 @@ import uniqueValidator from "mongoose-unique-validator"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import jwt from "jsonwebtoken"
+import { iUser } from "../interfaces/iUser"
+import { TimeStamps } from '@typegoose/typegoose/lib/defaultClasses';
+import { DocumentType, getModelForClass, index, modelOptions, plugin, pre, prop, types } from '@typegoose/typegoose';
+import { gravatarURL } from "../utils/helpers";
 
-const Schema = mongoose.Schema
 
-const UserSchema = new Schema(
-    {
-        channelName: {
-            type: String,
-            required: [true, 'Please add a channel name'],
-            unique: true,
-            uniqueCaseInsensitive: true
-        },
-        email: {
-            type: String,
-            required: [true, 'Please add an email'],
-            unique: true,
-            uniqueCaseInsensitive: true,
-            match: [
-                /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-                'Please add a valid email'
-            ]
-        },
-        photoUrl: {
-            type: String,
-            default: 'no-photo.jpg'
-        },
-        role: {
-            type: String,
-            enum: ['user', 'admin'],
-            default: 'user'
-        },
-        password: {
-            type: String,
-            required: [true, 'Please add a password'],
-            minlength: [6, 'Must be six characters long'],
-            select: false
-        },
-        resetPasswordToken: String,
-        resetPasswordExpire: Date
-    },
-    { toJSON: { virtuals: true }, toObject: { virtuals: true }, timestamps: true }
-)
+interface QueryHelpers {
+    matchPassword(enteredPassword: string): Promise<boolean>;
+    getSignedJwtToken(): string;
+    getResetPasswordToken(): string;
+}
 
-UserSchema.index({ channelName: 'text' })
 
-UserSchema.virtual('subscribers', {
-    ref: 'Subscription',
-    localField: '_id',
-    foreignField: 'channelId',
-    justOne: false,
-    count: true,
-    match: { userId: (this as any)._id }
+
+@index({
+    channelName: 'text'
 })
-UserSchema.virtual('videos', {
-    ref: 'Video',
-    localField: '_id',
-    foreignField: 'userId',
-    justOne: false,
-    count: true
-})
-
-UserSchema.plugin(uniqueValidator, { message: '{PATH} already exists.' })
-
-UserSchema.pre('find', function () {
+@plugin(uniqueValidator, { message: '{PATH} already exists' })
+@modelOptions({ schemaOptions: { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } } })
+@pre('find', function () {
     this.populate({ path: 'subscribers' })
 })
-
-// Ecrypt Password
-UserSchema.pre('save', async function (next) {
+@pre<User>('save', async function (next) {
     if (!this.isModified('password')) {
         next()
     }
-
     const salt = await bcrypt.genSalt(10)
     this.password = await bcrypt.hash(this.password, salt)
 })
+class User extends TimeStamps {
+    @prop({ required: true, unique: true, uniqueCaseInsensitive: true })
+    id!: string;
 
-UserSchema.methods.matchPassword = async function (enteredPassword: string) {
-    return await bcrypt.compare(enteredPassword, this.password)
+    @prop({ required: true, unique: true, uniqueCaseInsensitive: true })
+    channelName!: string
+
+    @prop({ required: true, unique: true, uniqueCaseInsensitive: true, match: /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/ })
+    email!: string;
+
+    @prop({ default: 'no-photo.jpg' })
+    photoUrl!: string;
+
+    @prop({ enum: ['user', 'admin'], default: 'user' })
+    role!: string;
+
+    @prop({ required: true, minlength: 6, select: false })
+    password!: string;
+
+    @prop({})
+    resetPasswordToken?: string;
+
+    @prop({ default: Date.now() })
+    resetPasswordExpire?: Date;
+
+    get gravatar() {
+        return gravatarURL(this.email);
+    }
+
+    async matchPassword(enteredPassword: string) {
+        return await bcrypt.compare(enteredPassword, this.password)
+    }
+
+    get getResetPasswordToken() {
+        const resetToken = crypto.randomBytes(20).toString('hex')
+
+        this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+
+        this.resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000)
+
+        return resetToken
+    }
+
+    get getSignedJwtToken() {
+        return jwt.sign({ id: this.id }, process.env.JWT ?? "", {
+            expiresIn: process.env.JWT_EXPIRE
+        })
+    }
+
 }
 
-UserSchema.methods.getSignedJwtToken = function () {
-    return jwt.sign({ id: this._id }, process.env.JWT_SECRET ?? 'some#strong@secret', {
-        expiresIn: process.env.JWT_EXPIRE ?? '30d'
-    })
-}
-
-UserSchema.methods.getResetPasswordToken = function () {
-    // Generate token
-    const resetToken = crypto.randomBytes(20).toString('hex')
-
-    // Hash token and set to resetPasswordToken field
-    this.resetPasswordToken = crypto
-        .createHash('sha256')
-        .update(resetToken)
-        .digest('hex')
-
-    // Set expire
-    this.resetPasswordExpire = Date.now() + 10 * 60 * 1000
-
-    return resetToken
-}
-
-export default mongoose.model('User', UserSchema)
+export type UserDoc = DocumentType<User>;
+export const UserModel = getModelForClass(User);
