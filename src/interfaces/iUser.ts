@@ -1,4 +1,4 @@
-interface iUser {
+export interface iUser {
     id: number;
     channelName: string;
     email: string;
